@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Towing App Compact SMS</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        :root {
+            --att-blue: #0057B8;
+            --att-dark: #004593;
+            --white: #FFFFFF;
+            --gray-light: #F4F4F4;
+            --text-dark: #333;
+            --text-gray: #666;
+            --green-sms: #25D366; /* Color tipo WhatsApp/Mensaje */
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--white);
+            margin: 0; padding: 0;
+            height: 100vh; width: 100vw;
+            display: flex; flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* 1. TOP BAR */
+        .top-bar {
+            background: white; padding: 8px 15px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05); z-index: 1000; flex-shrink: 0;
+        }
+        .brand {
+            text-align: center; font-weight: 900; color: var(--att-blue);
+            font-size: 1rem; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 1px;
+        }
+        .input-group { position: relative; margin-bottom: 5px; }
+        .input-group i { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--att-blue); font-size: 0.8rem; }
+        input[type="text"] {
+            width: 100%; padding: 8px 8px 8px 30px; border: 1px solid #CCC;
+            border-radius: 6px; font-size: 0.85rem; background: #F9F9F9; box-sizing: border-box; outline: none;
+        }
+        input:focus { border-color: var(--att-blue); background: white; }
+        .btn-calc {
+            background: var(--att-blue); color: white; border: none; width: 100%;
+            padding: 8px; border-radius: 6px; font-weight: 700; font-size: 0.85rem;
+            margin-top: 2px; cursor: pointer; text-transform: uppercase;
+        }
+
+        /* 2. MAPA */
+        #map { flex-grow: 1; width: 100%; position: relative; z-index: 1; }
+        .map-info-card {
+            position: absolute; top: 10px; right: 10px; background: white;
+            padding: 5px 10px; border-radius: 6px; box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            z-index: 500; display: none; border-left: 3px solid var(--att-blue);
+        }
+        .info-main { font-weight: 800; color: var(--text-dark); font-size: 0.8rem; }
+        .btn-confirm-map {
+            position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%);
+            background: var(--att-blue); color: white; padding: 8px 15px; border-radius: 20px;
+            font-size: 0.8rem; font-weight: bold; z-index: 500; display: none; cursor: pointer;
+        }
+
+        /* 3. BOTTOM PANEL */
+        .bottom-sheet {
+            background: white; border-top: 1px solid #EEE;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.05); z-index: 1000; flex-shrink: 0;
+            padding-top: 5px; padding-bottom: 15px;
+        }
+        .section-label { text-align: center; font-size: 0.65rem; font-weight: 700; color: var(--text-gray); text-transform: uppercase; margin: 5px 0 3px 0; }
+        .grid-buttons { display: grid; gap: 5px; padding: 0 10px; margin-bottom: 5px; }
+        .grid-3 { grid-template-columns: repeat(3, 1fr); }
+        .grid-4 { grid-template-columns: repeat(4, 1fr); }
+        .btn-item { display: flex; flex-direction: column; align-items: center; cursor: pointer; opacity: 0.4; padding: 2px 0; transition: 0.2s; }
+        .btn-item.active { opacity: 1; transform: scale(1.02); }
+        .icon-circle {
+            width: 34px; height: 34px; border-radius: 50%; background-color: var(--att-blue);
+            display: flex; justify-content: center; align-items: center; color: white;
+            font-size: 0.9rem; margin-bottom: 3px; box-shadow: 0 2px 4px rgba(0, 87, 184, 0.2);
+        }
+        .btn-text { font-size: 0.6rem; font-weight: 700; color: var(--text-dark); text-transform: uppercase; text-align: center; line-height: 1; }
+
+        /* RESUMEN */
+        .summary-panel { padding: 5px 15px; background: #FAFAFA; border-top: 1px solid #EEE; margin-top: 5px; }
+        .price-row { display: flex; justify-content: space-between; margin-bottom: 2px; font-size: 0.8rem; color: var(--text-dark); }
+        .price-row.hidden { display: none; }
+        .detail-text { font-size: 0.65rem; color: var(--text-gray); margin-bottom: 2px; }
+        
+        .total-row {
+            display: flex; justify-content: space-between; align-items: center;
+            border-top: 1px solid #DDD; padding-top: 3px; margin-top: 3px;
+        }
+        .price-total { font-weight: 900; font-size: 1.4rem; color: var(--att-blue); }
+        
+        /* BOTÓN SMS NUEVO */
+        .btn-sms {
+            background: var(--green-sms); color: white; border: none;
+            padding: 8px 15px; border-radius: 8px; font-weight: 700; font-size: 0.8rem;
+            cursor: pointer; display: flex; align-items: center; gap: 5px;
+            text-transform: uppercase;
+        }
+
+        .leaflet-routing-container { display: none !important; }
+        .leaflet-control-zoom { display: none; }
+    </style>
+</head>
+<body>
+
+    <div class="top-bar">
+        <div class="brand">TOWING</div>
+        <div class="input-group">
+            <i class="fas fa-map-marker-alt"></i>
+            <input type="text" id="startInput" placeholder="Recogida">
+        </div>
+        <div class="input-group">
+            <i class="fas fa-flag-checkered"></i>
+            <input type="text" id="endInput" placeholder="Destino">
+        </div>
+        <button class="btn-calc" onclick="calculateRouteFromInputs()">CALCULAR</button>
+    </div>
+
+    <div id="map">
+        <div id="routeInfoCard" class="map-info-card">
+            <div class="info-main" id="mapRouteText">0 min • 0 mi</div>
+        </div>
+        <div id="mapConfirmBtn" class="btn-confirm-map" onclick="confirmMapPoints()">
+            CONFIRMAR
+        </div>
+    </div>
+
+    <div class="bottom-sheet">
+        
+        <div class="section-label">Vehículo</div>
+        <div class="grid-buttons grid-3" id="vehicleGrid">
+            <div class="btn-item active" onclick="setVehicle('regular', this)">
+                <div class="icon-circle"><i class="fas fa-car-side"></i></div>
+                <div class="btn-text">Regular<br>SUV</div>
+            </div>
+            <div class="btn-item" onclick="setVehicle('xl', this)">
+                <div class="icon-circle"><i class="fas fa-truck-monster"></i></div>
+                <div class="btn-text">Extra<br>Large</div>
+            </div>
+            <div class="btn-item" onclick="setVehicle('wrecked', this)">
+                <div class="icon-circle"><i class="fas fa-car-crash"></i></div>
+                <div class="btn-text">Wrecked<br>Chocado</div>
+            </div>
+        </div>
+
+        <div class="section-label">Servicio</div>
+        <div class="grid-buttons grid-4">
+            <div class="btn-item" onclick="setService('battery', this)">
+                <div class="icon-circle"><i class="fas fa-car-battery"></i></div>
+                <div class="btn-text">Battery</div>
+            </div>
+            <div class="btn-item active" onclick="setService('tow', this)">
+                <div class="icon-circle"><i class="fas fa-truck-pickup"></i></div>
+                <div class="btn-text">Tow</div>
+            </div>
+            <div class="btn-item" onclick="setService('lockout', this)">
+                <div class="icon-circle"><i class="fas fa-key"></i></div>
+                <div class="btn-text">Lockout</div>
+            </div>
+            <div class="btn-item" onclick="setService('fuel', this)">
+                <div class="icon-circle"><i class="fas fa-gas-pump"></i></div>
+                <div class="btn-text">Fuel</div>
+            </div>
+        </div>
+
+        <div class="summary-panel">
+            <div class="price-row">
+                <span id="baseLabel">Hookup</span>
+                <span style="font-weight:bold;" id="basePriceDisplay">$80</span>
+            </div>
+            <div class="price-row" id="mileageRow">
+                <span>Millas Extra (<span id="extraMilesQty">0</span>)</span>
+                <span style="font-weight:bold;" id="mileageCost">$0</span>
+            </div>
+            <div class="detail-text" id="detailText">(10mi gratis, luego $7/mi)</div>
+            
+            <div class="total-row">
+                <div style="display:flex; align-items:center; gap:5px;">
+                    <span style="font-size:0.8rem; font-weight:bold; color:#333;">TOTAL:</span>
+                    <span class="price-total" id="totalPrice">$80.00</span>
+                </div>
+                <button class="btn-sms" onclick="sendSMS()">
+                    <i class="fas fa-comment-dots"></i> ENVIAR
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
+
+    <script>
+        const VEHICLE_RATES = { 'regular': 80, 'xl': 100, 'wrecked': 120 };
+        const SERVICE_FIXED_PRICES = { 'battery': 60, 'lockout': 60, 'fuel': 60 };
+        const MILEAGE_LIMIT = 10;
+        const PRICE_PER_MILE = 7;
+
+        let currentVehicleType = 'regular';
+        let currentServiceType = 'tow';
+        let currentMiles = 0;
+        let finalPrice = 80; // Variable global para guardar el total
+
+        var map = L.map('map', {zoomControl: false}).setView([36.1147, -115.1728], 11);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '' }).addTo(map);
+        var routingControl = null;
+        var markers = [];
+
+        function setVehicle(type, el) {
+            currentVehicleType = type;
+            document.querySelectorAll('#vehicleGrid .btn-item').forEach(b => b.classList.remove('active'));
+            el.classList.add('active');
+            updateCalculations();
+        }
+
+        function setService(service, el) {
+            currentServiceType = service;
+            el.parentElement.querySelectorAll('.btn-item').forEach(b => b.classList.remove('active'));
+            el.classList.add('active');
+            updateCalculations();
+        }
+
+        function updateCalculations() {
+            let total = 0;
+            let showMileage = true;
+            let baseDisplay = 0;
+            let mileageCost = 0;
+            let extraMiles = 0;
+
+            if (['battery', 'lockout', 'fuel'].includes(currentServiceType)) {
+                baseDisplay = SERVICE_FIXED_PRICES[currentServiceType];
+                total = baseDisplay;
+                showMileage = false;
+                document.getElementById('baseLabel').innerText = "Servicio";
+                document.getElementById('detailText').innerText = currentServiceType === 'fuel' ? "(Tarifa fija 2 galones)" : "(Tarifa fija)";
+                document.getElementById('vehicleGrid').style.opacity = '0.3';
+                document.getElementById('vehicleGrid').style.pointerEvents = 'none';
+            } else {
+                document.getElementById('vehicleGrid').style.opacity = '1';
+                document.getElementById('vehicleGrid').style.pointerEvents = 'auto';
+                document.getElementById('baseLabel').innerText = "Hookup";
+                document.getElementById('detailText').innerText = "(10mi gratis, luego $7/mi)";
+                baseDisplay = VEHICLE_RATES[currentVehicleType];
+                
+                if (currentMiles > MILEAGE_LIMIT) {
+                    extraMiles = currentMiles - MILEAGE_LIMIT;
+                    mileageCost = extraMiles * PRICE_PER_MILE;
+                }
+                total = baseDisplay + mileageCost;
+                showMileage = true;
+            }
+
+            finalPrice = total; // Guardar para el SMS
+            document.getElementById('basePriceDisplay').innerText = '$' + baseDisplay;
+            document.getElementById('totalPrice').innerText = '$' + total.toFixed(2);
+            
+            if (showMileage) {
+                document.getElementById('mileageRow').classList.remove('hidden');
+                document.getElementById('extraMilesQty').innerText = extraMiles.toFixed(1);
+                document.getElementById('mileageCost').innerText = '$' + mileageCost.toFixed(2);
+            } else {
+                document.getElementById('mileageRow').classList.add('hidden');
+            }
+        }
+
+        // --- FUNCIÓN ENVIAR SMS ---
+        function sendSMS() {
+            let serviceName = currentServiceType.charAt(0).toUpperCase() + currentServiceType.slice(1);
+            let vehicleNote = (currentServiceType === 'tow') ? ` (${currentVehicleType})` : '';
+            let distanceTxt = (currentServiceType === 'tow') ? `${currentMiles.toFixed(1)} millas` : 'N/A';
+            let formattedPrice = '$' + finalPrice.toFixed(2);
+
+            // Texto del mensaje
+            let msg = `🚗 Cotización Towing:\n💰 Total: ${formattedPrice}\n🛠 Servicio: ${serviceName}${vehicleNote}\n📍 Distancia: ${distanceTxt}\n\n¡Gracias por preferirnos!`;
+
+            // Codificar para URL
+            let encodedMsg = encodeURIComponent(msg);
+            
+            // Abrir app de mensajes (funciona en iPhone y Android)
+            window.open(`sms:&body=${encodedMsg}`, '_self');
+        }
+
+        // MAP LOGIC
+        map.on('click', function(e) {
+            if (markers.length >= 2) resetMap();
+            var type = markers.length === 0 ? 'start' : 'end';
+            var circleIcon = L.divIcon({
+                className: 'custom-div-icon',
+                html: `<div style="background-color:#0057B8; width:12px; height:12px; border-radius:50%; border:2px solid white; box-shadow:0 1px 3px rgba(0,0,0,0.3);"></div>`,
+                iconSize: [12, 12], iconAnchor: [6, 6]
+            });
+            var marker = L.marker(e.latlng, {icon: circleIcon}).addTo(map);
+            markers.push(marker);
+
+            if (type === 'start') document.getElementById('startInput').value = "Punto A";
+            else {
+                document.getElementById('endInput').value = "Punto B";
+                calculateRoute(markers[0].getLatLng(), markers[1].getLatLng());
+            }
+        });
+
+        async function calculateRouteFromInputs() {
+            var startText = document.getElementById('startInput').value;
+            var endText = document.getElementById('endInput').value;
+            if(!startText || !endText) { alert("Faltan direcciones"); return; }
+            resetMap();
+            try {
+                var startCoords = await getCoords(startText);
+                var endCoords = await getCoords(endText);
+                if(startCoords && endCoords) {
+                    var s = L.latLng(startCoords.lat, startCoords.lon);
+                    var e = L.latLng(endCoords.lat, endCoords.lon);
+                    L.marker(s).addTo(map); L.marker(e).addTo(map);
+                    markers.push({getLatLng:()=>s}, {getLatLng:()=>e});
+                    calculateRoute(s, e);
+                } else { alert("No encontrada"); }
+            } catch(e) { console.error(e); }
+        }
+
+        async function getCoords(addr) {
+            if (!addr.toLowerCase().includes("vegas")) addr += ", Las Vegas";
+            const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addr)}`);
+            const data = await res.json();
+            return data[0];
+        }
+
+        function calculateRoute(start, end) {
+            routingControl = L.Routing.control({
+                waypoints: [start, end],
+                routeWhileDragging: false,
+                show: false,
+                createMarker: function() { return null; }
+            }).addTo(map);
+
+            routingControl.on('routesfound', function(e) {
+                var summary = e.routes[0].summary;
+                currentMiles = (summary.totalDistance * 0.000621371);
+                var mins = Math.round(summary.totalTime / 60);
+                document.getElementById('routeInfoCard').style.display = 'block';
+                document.getElementById('mapRouteText').innerText = `${mins} min • ${currentMiles.toFixed(1)} mi`;
+                updateCalculations();
+            });
+        }
+
+        function resetMap() {
+            markers.forEach(m => map.removeLayer(m));
+            markers = [];
+            if(routingControl) { map.removeControl(routingControl); routingControl = null; }
+            document.getElementById('routeInfoCard').style.display = 'none';
+            currentMiles = 0;
+            updateCalculations();
+        }
+        function confirmMapPoints() {}
+    </script>
+</body>
+</html>
