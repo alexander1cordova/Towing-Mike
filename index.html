@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Towing App Compact SMS</title>
+    <title>Towing App</title>
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
@@ -17,7 +17,7 @@
             --gray-light: #F4F4F4;
             --text-dark: #333;
             --text-gray: #666;
-            --green-sms: #25D366; /* Color tipo WhatsApp/Mensaje */
+            --green-sms: #25D366;
         }
 
         body {
@@ -51,8 +51,16 @@
             margin-top: 2px; cursor: pointer; text-transform: uppercase;
         }
 
-        /* 2. MAPA */
-        #map { flex-grow: 1; width: 100%; position: relative; z-index: 1; }
+        /* 2. MAPA (MODIFICADO: TAMAÑO FIJO PEQUEÑO) */
+        #map { 
+            height: 25vh; /* Ocupa solo el 40% de la altura */
+            width: 100%; 
+            position: relative; 
+            z-index: 1; 
+            flex-shrink: 0; /* No se encoge */
+            border-bottom: 1px solid #ddd;
+        }
+        
         .map-info-card {
             position: absolute; top: 10px; right: 10px; background: white;
             padding: 5px 10px; border-radius: 6px; box-shadow: 0 2px 10px rgba(0,0,0,0.2);
@@ -65,18 +73,24 @@
             font-size: 0.8rem; font-weight: bold; z-index: 500; display: none; cursor: pointer;
         }
 
-        /* 3. BOTTOM PANEL */
+        /* 3. BOTTOM PANEL (MODIFICADO: LLENA EL RESTO PERO NO AGRANDA ELEMENTOS) */
         .bottom-sheet {
             background: white; border-top: 1px solid #EEE;
-            box-shadow: 0 -2px 10px rgba(0,0,0,0.05); z-index: 1000; flex-shrink: 0;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.05); z-index: 1000; 
+            flex-grow: 1; /* Ocupa todo el espacio sobrante hacia abajo */
+            overflow-y: auto; /* Permite scroll si hace falta */
             padding-top: 5px; padding-bottom: 15px;
+            display: block; /* Mantiene el flujo normal, no flexbox vertical estirado */
         }
+        
         .section-label { text-align: center; font-size: 0.65rem; font-weight: 700; color: var(--text-gray); text-transform: uppercase; margin: 5px 0 3px 0; }
         .grid-buttons { display: grid; gap: 5px; padding: 0 10px; margin-bottom: 5px; }
         .grid-3 { grid-template-columns: repeat(3, 1fr); }
         .grid-4 { grid-template-columns: repeat(4, 1fr); }
         .btn-item { display: flex; flex-direction: column; align-items: center; cursor: pointer; opacity: 0.4; padding: 2px 0; transition: 0.2s; }
         .btn-item.active { opacity: 1; transform: scale(1.02); }
+        
+        /* TAMAÑOS ORIGINALES CONSERVADOS */
         .icon-circle {
             width: 34px; height: 34px; border-radius: 50%; background-color: var(--att-blue);
             display: flex; justify-content: center; align-items: center; color: white;
@@ -96,7 +110,7 @@
         }
         .price-total { font-weight: 900; font-size: 1.4rem; color: var(--att-blue); }
         
-        /* BOTÓN SMS NUEVO */
+        /* BOTÓN SMS */
         .btn-sms {
             background: var(--green-sms); color: white; border: none;
             padding: 8px 15px; border-radius: 8px; font-weight: 700; font-size: 0.8rem;
@@ -114,7 +128,7 @@
         <div class="brand">TOWING</div>
         <div class="input-group">
             <i class="fas fa-map-marker-alt"></i>
-            <input type="text" id="startInput" placeholder="Recogida">
+            <input type="text" id="startInput" placeholder="Car Location">
         </div>
         <div class="input-group">
             <i class="fas fa-flag-checkered"></i>
@@ -205,8 +219,9 @@
         let currentVehicleType = 'regular';
         let currentServiceType = 'tow';
         let currentMiles = 0;
-        let finalPrice = 80; // Variable global para guardar el total
+        let finalPrice = 80;
 
+        // Inicializar mapa (Las Vegas)
         var map = L.map('map', {zoomControl: false}).setView([36.1147, -115.1728], 11);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '' }).addTo(map);
         var routingControl = null;
@@ -245,7 +260,7 @@
                 document.getElementById('vehicleGrid').style.opacity = '1';
                 document.getElementById('vehicleGrid').style.pointerEvents = 'auto';
                 document.getElementById('baseLabel').innerText = "Hookup";
-                document.getElementById('detailText').innerText = "(10mi gratis, luego $7/mi)";
+                document.getElementById('detailText').innerText = "(0-10mi, luego $7/mi)";
                 baseDisplay = VEHICLE_RATES[currentVehicleType];
                 
                 if (currentMiles > MILEAGE_LIMIT) {
@@ -256,7 +271,7 @@
                 showMileage = true;
             }
 
-            finalPrice = total; // Guardar para el SMS
+            finalPrice = total;
             document.getElementById('basePriceDisplay').innerText = '$' + baseDisplay;
             document.getElementById('totalPrice').innerText = '$' + total.toFixed(2);
             
@@ -275,15 +290,31 @@
             let vehicleNote = (currentServiceType === 'tow') ? ` (${currentVehicleType})` : '';
             let distanceTxt = (currentServiceType === 'tow') ? `${currentMiles.toFixed(1)} millas` : 'N/A';
             let formattedPrice = '$' + finalPrice.toFixed(2);
+            let phone = "7025029691";
+            
+            // Recoger direcciones si están disponibles
+            let pickup = document.getElementById('startInput').value || "";
+            let dropoff = document.getElementById('endInput').value || "";
+            let locText = "";
+            if(pickup) locText += `\n📍 Pickup: ${pickup}`;
+            if(dropoff) locText += `\n🏁 Dropoff: ${dropoff}`;
 
             // Texto del mensaje
-            let msg = `🚗 Cotización Towing:\n💰 Total: ${formattedPrice}\n🛠 Servicio: ${serviceName}${vehicleNote}\n📍 Distancia: ${distanceTxt}\n\n¡Gracias por preferirnos!`;
+            let msg = `🚗 Cotización Towing:${locText}\n💰 Total: ${formattedPrice}\n🛠 Servicio: ${serviceName}${vehicleNote}\n📏 Distancia: ${distanceTxt}`;
 
-            // Codificar para URL
-            let encodedMsg = encodeURIComponent(msg);
+            // Detectar dispositivo para formato SMS adecuado
+            let ua = navigator.userAgent.toLowerCase();
+            let url = "";
             
-            // Abrir app de mensajes (funciona en iPhone y Android)
-            window.open(`sms:&body=${encodedMsg}`, '_self');
+            if (ua.indexOf("iphone") > -1 || ua.indexOf("ipad") > -1) {
+                // iOS usa '&' para el body
+                url = `sms:${phone}&body=${encodeURIComponent(msg)}`;
+            } else {
+                // Android usa '?' para el body
+                url = `sms:${phone}?body=${encodeURIComponent(msg)}`;
+            }
+            
+            window.location.href = url;
         }
 
         // MAP LOGIC
@@ -298,9 +329,9 @@
             var marker = L.marker(e.latlng, {icon: circleIcon}).addTo(map);
             markers.push(marker);
 
-            if (type === 'start') document.getElementById('startInput').value = "Punto A";
+            if (type === 'start') document.getElementById('startInput').value = "Punto Mapa A";
             else {
-                document.getElementById('endInput').value = "Punto B";
+                document.getElementById('endInput').value = "Punto Mapa B";
                 calculateRoute(markers[0].getLatLng(), markers[1].getLatLng());
             }
         });
@@ -319,7 +350,9 @@
                     L.marker(s).addTo(map); L.marker(e).addTo(map);
                     markers.push({getLatLng:()=>s}, {getLatLng:()=>e});
                     calculateRoute(s, e);
-                } else { alert("No encontrada"); }
+                    // Ajustar el zoom para ver la ruta en el mapa pequeño
+                    map.fitBounds(L.latLngBounds(s, e), {padding: [20, 20]});
+                } else { alert("Dirección no encontrada"); }
             } catch(e) { console.error(e); }
         }
 
