@@ -18,6 +18,7 @@
             --text-dark: #333;
             --text-gray: #666;
             --green-sms: #25D366;
+            --gray-btn: #555555;
         }
 
         body {
@@ -26,7 +27,6 @@
             margin: 0; padding: 0;
             min-height: 100vh; width: 100vw;
             display: flex; flex-direction: column;
-            /* CAMBIO: Ahora permite scroll para pantallas pequeñas */
             overflow-y: auto; 
             overflow-x: hidden;
         }
@@ -53,23 +53,47 @@
         /* Estilos para las sugerencias de dirección */
         .suggestions-list {
             position: absolute; background: white; width: 100%; border: 1px solid #ddd;
-            border-top: none; z-index: 2000; max-height: 150px; overflow-y: auto;
+            border-top: none; z-index: 2000; max-height: 200px; overflow-y: auto;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1); border-radius: 0 0 6px 6px; display: none;
         }
-        .suggestion-item { padding: 10px; cursor: pointer; font-size: 0.85rem; border-bottom: 1px solid #eee; }
-        .suggestion-item:hover { background: #f0f0f0; }
+        .suggestion-item { 
+            padding: 12px 10px; 
+            cursor: pointer; 
+            font-size: 0.9rem; 
+            border-bottom: 1px solid #eee; 
+            color: #333;
+            line-height: 1.3;
+        }
+        .suggestion-item:hover { background: #f0f8ff; color: var(--att-blue); }
+        .suggestion-item strong { display: block; font-weight: 600; }
+        .suggestion-item span { font-size: 0.8rem; color: #666; }
 
-        .hidden-field { display: none; }
+        .hidden-field { display: none !important; }
+
+        /* Contenedor para los botones superiores */
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 5px;
+        }
 
         .btn-calc {
-            background: var(--att-blue); color: white; border: none; width: 100%;
+            background: var(--att-blue); color: white; border: none;
             padding: 10px; border-radius: 6px; font-weight: 700; font-size: 0.9rem;
-            margin-top: 5px; cursor: pointer; text-transform: uppercase;
+            cursor: pointer; text-transform: uppercase;
+            flex: 2; /* Ocupa más espacio */
+        }
+        
+        .btn-reset {
+            background: var(--gray-btn); color: white; border: none;
+            padding: 10px; border-radius: 6px; font-weight: 700; font-size: 0.8rem;
+            cursor: pointer; text-transform: uppercase;
+            flex: 1; /* Ocupa menos espacio */
         }
 
         /* 2. MAPA */
         #map { 
-            height: 30vh; /* Ajustado para dar espacio al scroll */
+            height: 30vh; 
             width: 100%; 
             position: relative; 
             z-index: 1; 
@@ -132,21 +156,24 @@
 <body>
 
     <div class="top-bar">
-        <div class="brand">PRECIOS </div>
+        <div class="brand">Servicio de Grua</div>
         
         <div class="input-group">
             <i class="fas fa-map-marker-alt"></i>
-            <input type="text" id="startInput" placeholder="Pick up address" autocomplete="off">
+            <input type="text" id="startInput" placeholder="Dirección de Recogida" autocomplete="off">
             <div id="startSuggestions" class="suggestions-list"></div>
         </div>
         
         <div class="input-group" id="destContainer">
             <i class="fas fa-flag-checkered"></i>
-            <input type="text" id="endInput" placeholder="Destination" autocomplete="off">
+            <input type="text" id="endInput" placeholder="Dirección de Destino" autocomplete="off">
             <div id="endSuggestions" class="suggestions-list"></div>
         </div>
 
-        <button class="btn-calc" onclick="handleSearchButton()">CALCULATE ROUTE</button>
+        <div class="action-buttons">
+            <button class="btn-calc" onclick="handleSearchButton()">CALCULAR RUTA</button>
+            <button class="btn-reset" onclick="window.location.reload()">EMPEZAR DE NUEVO</button>
+        </div>
     </div>
 
     <div id="map">
@@ -173,7 +200,7 @@
             </div>
         </div>
 
-        <div class="section-label">Other Services</div>
+        <div class="section-label">Otros Servicios</div>
         <div class="grid-buttons grid-3" id="servicesGrid">
             <div class="btn-item" onclick="setService('battery', this)">
                 <div class="icon-circle"><i class="fas fa-car-battery"></i></div>
@@ -198,7 +225,7 @@
                 <span>Miles over Base (<span id="extraMilesQty">0</span>)</span>
                 <span style="font-weight:bold;" id="mileageCost">$0</span>
             </div>
-            <div class="detail-text" id="detailText" style="font-size: 0.65rem; color: var(--text-gray); margin-bottom: 2px;">(Calculate route to see price)</div>
+            <div class="detail-text" id="detailText" style="font-size: 0.65rem; color: var(--text-gray); margin-bottom: 2px;">(Calcular ruta para el precio)</div>
             
             <div class="total-row">
                 <div style="display:flex; align-items:center; gap:5px;">
@@ -246,14 +273,39 @@
                     data.forEach(item => {
                         const div = document.createElement('div');
                         div.className = 'suggestion-item';
-                        div.innerText = item.display_name.replace(", United States", "");
+                        
+                        // LÓGICA DE LIMPIEZA
+                        let cleanAddress = "";
+                        let secondaryInfo = "";
+                        const addr = item.address;
+                        
+                        if (addr.house_number && addr.road) {
+                            cleanAddress = `${addr.house_number} ${addr.road}`;
+                        } else if (addr.road) {
+                            cleanAddress = `${addr.road}`;
+                        } else {
+                            cleanAddress = item.display_name.split(",")[0];
+                        }
+                        
+                        if (addr.city || addr.town || addr.village) {
+                            secondaryInfo = (addr.city || addr.town || addr.village) + ", NV";
+                        } else {
+                            secondaryInfo = "Las Vegas, NV";
+                        }
+
+                        div.innerHTML = `<strong>${cleanAddress}</strong><span>${secondaryInfo}</span>`;
+                        
                         div.onclick = () => {
-                            document.getElementById(inputId).value = div.innerText;
+                            document.getElementById(inputId).value = cleanAddress + ", " + secondaryInfo;
                             list.style.display = 'none';
-                            handleSearchButton();
+                            if(inputId === 'endInput' && document.getElementById('startInput').value) {
+                                handleSearchButton();
+                            }
                         };
                         list.appendChild(div);
                     });
+                } else {
+                    list.style.display = 'none';
                 }
             } catch (e) { console.error(e); }
         }
@@ -261,13 +313,23 @@
         document.getElementById('startInput').oninput = (e) => fetchSuggestions(e.target.value, 'startSuggestions', 'startInput');
         document.getElementById('endInput').oninput = (e) => fetchSuggestions(e.target.value, 'endSuggestions', 'endInput');
 
-        // --- CONVERTIR COORDENADAS A DIRECCIÓN REAL (Click en mapa) ---
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('.input-group')) {
+                document.getElementById('startSuggestions').style.display = 'none';
+                document.getElementById('endSuggestions').style.display = 'none';
+            }
+        });
+
+        // --- CONVERTIR COORDENADAS A DIRECCIÓN ---
         async function getAddress(lat, lon) {
             try {
-                const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`);
+                const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&addressdetails=1`);
                 const data = await res.json();
-                return data.display_name.replace(", United States", "");
-            } catch (e) { return "Coordenada seleccionada"; }
+                const addr = data.address;
+                if (addr.house_number && addr.road) return `${addr.house_number} ${addr.road}`;
+                else if (addr.road) return `${addr.road}`;
+                return data.display_name.split(',')[0];
+            } catch (e) { return "Ubicación seleccionada"; }
         }
 
         map.on('click', async function(e) {
@@ -294,7 +356,6 @@
             }
         });
 
-        // El resto de funciones se mantienen iguales por tu petición
         function setVehicle(type, el) {
             currentVehicleType = type;
             currentServiceType = 'tow';
@@ -317,7 +378,6 @@
 
         function updateCalculations() {
             let total = 0;
-            let showMileage = false;
             let baseDisplay = 0;
             let mileageCost = 0;
             let extraMiles = 0;
@@ -406,6 +466,10 @@
             });
         }
 
+        function searchSinglePoint() {
+             // Función vacía para futura implementación de puntos únicos
+        }
+
         function resetMap() {
             markers.forEach(m => { if(m.getLatLng) map.removeLayer(m); });
             markers = [];
@@ -417,7 +481,14 @@
 
         function sendSMS() {
             if (finalPrice === 0) { alert("Calcula la ruta primero."); return; }
-            let msg = `🚗 AUTOCODE SERVICE\n📍 Recogida: ${document.getElementById('startInput').value}\n🛠 Servicio: ${currentServiceType}\n💰 TOTAL: $${finalPrice.toFixed(2)}`;
+            let pickup = document.getElementById('startInput').value;
+            let dest = document.getElementById('endInput').value;
+            
+            let msg = `🚗 TOWING SERVICE\n\n📍 RECOGIDA: ${pickup}`;
+            if (currentServiceType === 'tow') msg += `\n🏁 DESTINO: ${dest}`;
+            msg += `\n🛠 SERVICIO: ${currentServiceType.toUpperCase()}`;
+            msg += `\n💰 TOTAL ESTIMADO: $${finalPrice.toFixed(2)}`;
+            
             window.location.href = `sms:7025029691?body=${encodeURIComponent(msg)}`;
         }
     </script>
